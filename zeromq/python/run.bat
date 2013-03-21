@@ -1,20 +1,40 @@
 @echo off
 
-if '%1'=='' goto Usage
-if '%2'=='' goto Usage
+if '%1'=='rr' goto RequestReply
+if '%1'=='ps' goto PublishSubscribe
+if '%1'=='pp' goto ParallelPipeline
+goto Usage
 
-start "Node1" python node.py %1
-start "Node2" python node.py %2
+:RequestReply
+start "Server" python node.py rep
+start "Client1" python node.py req
+start "Client2" python node.py req
+start "Client3" python node.py req
+goto End
+
+:PublishSubscribe
+start "Publisher" python node.py pub
+start "Subscriber1" python node.py sub
+start "Subscriber2" python node.py sub
+start "Subscriber3" python node.py sub
+goto End
+
+:ParallelPipeline
+start "Ventilator" python node.py ventilator
+start "Worker1" python node.py worker
+start "Worker2" python node.py worker
+start "Worker3" python node.py worker
+start "Sink" python node.py sink
 goto End
 
 :Usage
 echo Usage:
 rem Request-Reply
-echo %0 req rep
+echo %0 rr
 rem Publish-Subscribe
-echo %0 pub sub
+echo %0 ps
 rem Parallel Pipeline
-echo %0 push pull
+echo %0 pp
 
 echo %0 req router
 echo %0 dealer rep
