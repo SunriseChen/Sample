@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import zmq
-import sys, time
+import os, sys, time
 from datetime import datetime
 import random
 
@@ -15,6 +15,16 @@ address = '%s://%s' % (transport, endpoint)
 
 
 def question():
+	return os.urandom(1024)
+
+
+def answer(question):
+	from hashlib import md5
+
+	return md5(question).digest()
+
+
+def question0():
 	x = random.random() * 100
 	y = random.random() * 100
 	ops = ['+', '-', '*', '/']
@@ -24,22 +34,22 @@ def question():
 	return '%.2f %s %.2f' % (x, op, y)
 
 
-def answer(question):
+def answer0(question):
 	return str(eval(question))
 
 
-def req():
+def req(count):
 	context = zmq.Context()
 	client = context.socket(zmq.REQ)
 	client.connect(address)
 
-	while True:
+	for i in xrange(0, count):
 		msg_send = question()
 		client.send(msg_send)
-		print('Send: %s' % msg_send)
+		#print('Send: %s' % msg_send)
 		msg_recv = client.recv()
-		print('Receive: %s' % msg_recv)
-		time.sleep(1)
+		#print('Receive: %s' % msg_recv)
+		time.sleep(10.0 / count)
 
 
 def rep():
@@ -49,11 +59,11 @@ def rep():
 
 	while True:
 		msg = server.recv()
-		print('Receive: %s' % msg)
+		#print('Receive: %s' % msg)
 		server.send(answer(msg))
 
 
-def pub():
+def pub(count):
 	context = zmq.Context()
 	publisher = context.socket(zmq.PUB)
 	publisher.bind(address)
@@ -62,10 +72,10 @@ def pub():
 		msg = str(datetime.now())
 		publisher.send(msg)
 		print('Send: %s' % msg)
-		time.sleep(1)
+		time.sleep(10.0 / count)
 
 
-def sub():
+def sub(count):
 	context = zmq.Context()
 	subscriber = context.socket(zmq.SUB)
 	subscriber.connect(address)
@@ -73,12 +83,12 @@ def sub():
 	msg_filter = str(datetime.today().year)
 	subscriber.setsockopt(zmq.SUBSCRIBE, msg_filter)
 
-	while True:
+	for i in xrange(0, count):
 		msg = subscriber.recv()
 		print('Receive: %s' % msg)
 
 
-def ventilator():
+def ventilator(count):
 	context = zmq.Context()
 	sender = context.socket(zmq.PUSH)
 	sender.bind('%s://*:%d' % (transport, port))
@@ -86,11 +96,11 @@ def ventilator():
 	while True:
 		msg = question()
 		sender.send(msg)
-		print('Send: %s' % msg)
-		time.sleep(1)
+		#print('Send: %s' % msg)
+		time.sleep(10.0 / count)
 
 
-def worker():
+def worker(count):
 	context = zmq.Context()
 	receiver = context.socket(zmq.PULL)
 	receiver.connect('%s://localhost:%d' % (transport, port))
@@ -98,10 +108,10 @@ def worker():
 	sender = context.socket(zmq.PUSH)
 	sender.connect('%s://localhost:%d' % (transport, port + 1))
 
-	while True:
+	for i in xrange(0, count / 3):
 		msg = receiver.recv()
-		print('Receive: %s' % msg)
-		time.sleep(3)
+		#print('Receive: %s' % msg)
+		time.sleep(30.0 / count)
 		sender.send('%s = %s' % (msg, answer(msg)))
 
 
@@ -112,25 +122,47 @@ def sink():
 
 	while True:
 		msg = receiver.recv()
-		print('Receive: %s' % msg)
+		#print('Receive: %s' % msg)
+
+
+def start_thread(func, count):
+	import threading
+
+	if count > 1:
+		threads = []
+		for t in xrange(0, count):
+			print('thread: %d' % t)
+			thread = threading.Thread(target=func, args=(count,))
+			thread.start()
+			threads.append(thread)
+			time.sleep(10.0 / count)
+
+		for thread in threads:
+			thread.join()
+	else:
+		func(1)
 
 
 def main():
 	random.seed()
-	if len(sys.argv) > 1:
+	args = len(sys.argv)
+	if args > 1:
 		mode = sys.argv[1].lower()
+		threads = 1
+		if args > 2:
+			threads = int(sys.argv[2])
 		if mode == 'req':
-			req()
+			start_thread(req, threads)
 		elif mode == 'rep':
 			rep()
 		elif mode == 'pub':
-			pub()
+			pub(threads)
 		elif mode == 'sub':
-			sub()
+			start_thread(sub, threads)
 		elif mode == 'ventilator':
-			ventilator()
+			ventilator(threads)
 		elif mode == 'worker':
-			worker()
+			start_thread(worker, threads)
 		elif mode == 'sink':
 			sink()
 
