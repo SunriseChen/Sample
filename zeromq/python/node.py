@@ -12,19 +12,10 @@ host = '127.0.0.1'
 port = 1234
 endpoint = '%s:%d' % (host, port)
 address = '%s://%s' % (transport, endpoint)
+TEST_BLOCK_SIZE = 1024
 
 
 def question():
-	return os.urandom(1024)
-
-
-def answer(question):
-	from hashlib import md5
-
-	return md5(question).digest()
-
-
-def question0():
 	x = random.random() * 100
 	y = random.random() * 100
 	ops = ['+', '-', '*', '/']
@@ -34,8 +25,42 @@ def question0():
 	return '%.2f %s %.2f' % (x, op, y)
 
 
-def answer0(question):
+def answer(question):
 	return str(eval(question))
+
+
+#def question():
+#	return os.urandom(TEST_BLOCK_SIZE)
+#
+#
+#def answer(question):
+#	from hashlib import md5
+#	return md5(question).digest()
+
+
+def req1():
+	context = zmq.Context()
+	client = context.socket(zmq.REQ)
+	client.connect(address)
+
+	for i in xrange(0, 10):
+		msg_send = question()
+		client.send(msg_send)
+		print('Send: %s' % msg_send)
+		msg_recv = client.recv()
+		print('Receive: %s' % msg_recv)
+		time.sleep(1)
+
+
+def rep1():
+	context = zmq.Context()
+	server = context.socket(zmq.REP)
+	server.bind(address)
+
+	while True:
+		msg = server.recv()
+		print('Receive: %s' % msg)
+		server.send(answer(msg))
 
 
 def req(count):
@@ -44,12 +69,14 @@ def req(count):
 	client.connect(address)
 
 	for i in xrange(0, count):
-		msg_send = question()
+		msg_send = os.urandom(TEST_BLOCK_SIZE)
 		client.send(msg_send)
-		#print('Send: %s' % msg_send)
+		if len(msg_send) != TEST_BLOCK_SIZE:
+			print('Send error !!!')
 		msg_recv = client.recv()
-		#print('Receive: %s' % msg_recv)
-		time.sleep(10.0 / count)
+		if msg_send != msg_recv:
+			print('Receive error !!!')
+		time.sleep(0.0001 * count)
 
 
 def rep():
@@ -59,8 +86,7 @@ def rep():
 
 	while True:
 		msg = server.recv()
-		#print('Receive: %s' % msg)
-		server.send(answer(msg))
+		server.send(msg)
 
 
 def pub(count):
@@ -72,7 +98,7 @@ def pub(count):
 		msg = str(datetime.now())
 		publisher.send(msg)
 		print('Send: %s' % msg)
-		time.sleep(10.0 / count)
+		time.sleep(1.0 / count)
 
 
 def sub(count):
@@ -97,7 +123,7 @@ def ventilator(count):
 		msg = question()
 		sender.send(msg)
 		#print('Send: %s' % msg)
-		time.sleep(10.0 / count)
+		time.sleep(1.0 / count)
 
 
 def worker(count):
@@ -111,7 +137,7 @@ def worker(count):
 	for i in xrange(0, count / 3):
 		msg = receiver.recv()
 		#print('Receive: %s' % msg)
-		time.sleep(30.0 / count)
+		time.sleep(3.0 / count)
 		sender.send('%s = %s' % (msg, answer(msg)))
 
 
@@ -128,19 +154,16 @@ def sink():
 def start_thread(func, count):
 	import threading
 
-	if count > 1:
-		threads = []
-		for t in xrange(0, count):
-			print('thread: %d' % t)
-			thread = threading.Thread(target=func, args=(count,))
-			thread.start()
-			threads.append(thread)
-			time.sleep(10.0 / count)
+	threads = []
+	for t in xrange(0, count):
+		print('thread: %d' % t)
+		thread = threading.Thread(target=func, args=(count,))
+		thread.start()
+		threads.append(thread)
+		time.sleep(1.0 / count)
 
-		for thread in threads:
-			thread.join()
-	else:
-		func(1)
+	for thread in threads:
+		thread.join()
 
 
 def main():
@@ -151,20 +174,16 @@ def main():
 		threads = 1
 		if args > 2:
 			threads = int(sys.argv[2])
-		if mode == 'req':
-			start_thread(req, threads)
-		elif mode == 'rep':
-			rep()
-		elif mode == 'pub':
-			pub(threads)
-		elif mode == 'sub':
-			start_thread(sub, threads)
-		elif mode == 'ventilator':
-			ventilator(threads)
-		elif mode == 'worker':
-			start_thread(worker, threads)
-		elif mode == 'sink':
-			sink()
+
+		func = mode if threads > 1 else (mode + '1')
+		func = getattr(sys.modules[__name__], func)
+
+		if threads > 1 and (mode == 'req' or mode == 'sub' or mode == 'worker'):
+			start_thread(func, threads)
+		elif mode == 'pub' or mode == 'ventilator':
+			func(threads)
+		else:
+			func()
 
 
 if __name__ == '__main__':
