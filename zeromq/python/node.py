@@ -89,16 +89,45 @@ def rep():
 		server.send(msg)
 
 
+def pub1():
+	context = zmq.Context()
+	publisher = context.socket(zmq.PUB)
+	publisher.bind(address)
+
+	for i in xrange(0, 10):
+		msg = str(datetime.now())
+		publisher.send(msg)
+		print('Send: %s' % msg)
+		time.sleep(1)
+
+	publisher.send(msg + 'exit')
+
+
+def sub1():
+	context = zmq.Context()
+	subscriber = context.socket(zmq.SUB)
+	subscriber.connect(address)
+
+	msg_filter = str(datetime.today().year)
+	subscriber.setsockopt(zmq.SUBSCRIBE, msg_filter)
+
+	msg = ''
+	while not msg.endswith('exit'):
+		msg = subscriber.recv()
+		print('Receive: %s' % msg)
+
+
 def pub(count):
 	context = zmq.Context()
 	publisher = context.socket(zmq.PUB)
 	publisher.bind(address)
 
-	while True:
+	for i in xrange(0, count + 10):
 		msg = str(datetime.now())
 		publisher.send(msg)
-		print('Send: %s' % msg)
-		time.sleep(1.0 / count)
+		time.sleep(0.1)
+
+	publisher.send(msg + 'exit')
 
 
 def sub(count):
@@ -109,8 +138,49 @@ def sub(count):
 	msg_filter = str(datetime.today().year)
 	subscriber.setsockopt(zmq.SUBSCRIBE, msg_filter)
 
-	for i in xrange(0, count):
+	msg = ''
+	while not msg.endswith('exit'):
 		msg = subscriber.recv()
+
+
+def ventilator1():
+	context = zmq.Context()
+	sender = context.socket(zmq.PUSH)
+	sender.bind('%s://*:%d' % (transport, port))
+
+	for i in xrange(0, 30):
+		msg = question()
+		sender.send(msg)
+		print('Send: %s' % msg)
+		time.sleep(0.3)
+
+	for i in xrange(0, 3):
+		sender.send('exit')
+
+
+def worker1():
+	context = zmq.Context()
+	receiver = context.socket(zmq.PULL)
+	receiver.connect('%s://localhost:%d' % (transport, port))
+
+	sender = context.socket(zmq.PUSH)
+	sender.connect('%s://localhost:%d' % (transport, port + 1))
+
+	msg = None
+	while msg != 'exit':
+		msg = receiver.recv()
+		print('Receive: %s' % msg)
+		time.sleep(1)
+		sender.send('%s = %s' % (msg, answer(msg)))
+
+
+def sink1():
+	context = zmq.Context()
+	receiver = context.socket(zmq.PULL)
+	receiver.bind('%s://*:%d' % (transport, port + 1))
+
+	while True:
+		msg = receiver.recv()
 		print('Receive: %s' % msg)
 
 
@@ -119,11 +189,15 @@ def ventilator(count):
 	sender = context.socket(zmq.PUSH)
 	sender.bind('%s://*:%d' % (transport, port))
 
-	while True:
-		msg = question()
+	for i in xrange(0, 30 * count):
+		msg = os.urandom(TEST_BLOCK_SIZE)
 		sender.send(msg)
-		#print('Send: %s' % msg)
-		time.sleep(1.0 / count)
+		if len(msg) != TEST_BLOCK_SIZE:
+			print('Send error !!!')
+		time.sleep(0.01 * count)
+
+	for i in xrange(0, 3 * count):
+		sender.send('exit')
 
 
 def worker(count):
@@ -134,11 +208,13 @@ def worker(count):
 	sender = context.socket(zmq.PUSH)
 	sender.connect('%s://localhost:%d' % (transport, port + 1))
 
-	for i in xrange(0, count / 3):
+	msg = None
+	while msg != 'exit':
 		msg = receiver.recv()
-		#print('Receive: %s' % msg)
-		time.sleep(3.0 / count)
-		sender.send('%s = %s' % (msg, answer(msg)))
+		if len(msg) != TEST_BLOCK_SIZE:
+			print('Receive error !!!')
+		time.sleep(0.03 * count)
+		sender.send(msg)
 
 
 def sink():
@@ -148,7 +224,8 @@ def sink():
 
 	while True:
 		msg = receiver.recv()
-		#print('Receive: %s' % msg)
+		if len(msg) != TEST_BLOCK_SIZE and msg != 'exit':
+			print('Receive error !!!')
 
 
 def start_thread(func, count):
@@ -160,7 +237,7 @@ def start_thread(func, count):
 		thread = threading.Thread(target=func, args=(count,))
 		thread.start()
 		threads.append(thread)
-		time.sleep(1.0 / count)
+		time.sleep(0.1)
 
 	for thread in threads:
 		thread.join()
@@ -180,7 +257,7 @@ def main():
 
 		if threads > 1 and (mode == 'req' or mode == 'sub' or mode == 'worker'):
 			start_thread(func, threads)
-		elif mode == 'pub' or mode == 'ventilator':
+		elif threads > 1 and (mode == 'pub' or mode == 'ventilator'):
 			func(threads)
 		else:
 			func()
