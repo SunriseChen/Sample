@@ -255,10 +255,11 @@ def main():
 		func = mode if threads > 1 else (mode + '1')
 		func = getattr(sys.modules[__name__], func)
 
-		if threads > 1 and (mode == 'req' or mode == 'sub' or mode == 'worker'):
-			start_thread(func, threads)
-		elif threads > 1 and (mode == 'pub' or mode == 'ventilator'):
-			func(threads)
+		if threads > 1:
+			if mode == 'req' or mode == 'sub' or mode == 'worker':
+				start_thread(func, threads)
+			elif mode == 'pub' or mode == 'ventilator':
+				func(threads)
 		else:
 			func()
 
