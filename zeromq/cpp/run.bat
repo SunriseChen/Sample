@@ -1,5 +1,6 @@
 @echo off
 
+call scons -Q
 if '%1'=='rr' goto RequestReply
 if '%1'=='ps' goto PublishSubscribe
 if '%1'=='pp' goto ParallelPipeline

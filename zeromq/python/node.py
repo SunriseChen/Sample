@@ -271,11 +271,11 @@ def start_thread(func, thread_count):
 
 def main():
 	random.seed()
-	args = len(sys.argv)
-	if args > 1:
+	argc = len(sys.argv)
+	if argc > 1:
 		mode = sys.argv[1].lower()
 		threads = 1
-		if args > 2:
+		if argc > 2:
 			threads = int(sys.argv[2])
 
 		func = mode if threads > 1 else (mode + '1')
