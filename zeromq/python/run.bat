@@ -29,15 +29,14 @@ goto End
 
 :Usage
 echo Usage:
-rem Request-Reply
-echo %0 rr
-echo %0 rr thread_count
-rem Publish-Subscribe
-echo %0 ps
-echo %0 ps thread_count
-rem Parallel Pipeline
-echo %0 pp
-echo %0 pp thread_count
+echo		Request-Reply:
+echo		%0 rr [thread_count]
+echo.
+echo		Publish-Subscribe:
+echo		%0 ps [thread_count]
+echo.
+echo		Parallel Pipeline:
+echo		%0 pp [thread_count]
 goto End
 
 :End
