@@ -260,6 +260,8 @@ def main():
 				start_thread(func, threads)
 			elif mode == 'pub' or mode == 'ventilator':
 				func(threads)
+			else:
+				func()
 		else:
 			func()
 
