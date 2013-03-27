@@ -12,6 +12,8 @@ host = '127.0.0.1'
 port = 1234
 endpoint = '%s:%d' % (host, port)
 address = '%s://%s' % (transport, endpoint)
+
+PROCESS_COUNT = 3
 TEST_BLOCK_SIZE = 1024
 
 
@@ -29,15 +31,6 @@ def answer(question):
 	return str(eval(question))
 
 
-#def question():
-#	return os.urandom(TEST_BLOCK_SIZE)
-#
-#
-#def answer(question):
-#	from hashlib import md5
-#	return md5(question).digest()
-
-
 def req1():
 	context = zmq.Context()
 	client = context.socket(zmq.REQ)
@@ -51,16 +44,25 @@ def req1():
 		print('Receive: %s' % msg_recv)
 		time.sleep(1)
 
+	client.send('exit')
+	#client.recv()
+
 
 def rep1():
 	context = zmq.Context()
 	server = context.socket(zmq.REP)
 	server.bind(address)
 
-	while True:
+	count = PROCESS_COUNT
+	while count > 0:
 		msg = server.recv()
 		print('Receive: %s' % msg)
-		server.send(answer(msg))
+		if msg == 'exit':
+			count = count - 1
+			print('%d' % count)
+			server.send('ok')
+		else:
+			server.send(answer(msg))
 
 
 def req(count):
@@ -68,7 +70,7 @@ def req(count):
 	client = context.socket(zmq.REQ)
 	client.connect(address)
 
-	for i in xrange(0, count):
+	for i in xrange(0, 10):
 		msg_send = os.urandom(TEST_BLOCK_SIZE)
 		client.send(msg_send)
 		if len(msg_send) != TEST_BLOCK_SIZE:
@@ -76,17 +78,25 @@ def req(count):
 		msg_recv = client.recv()
 		if msg_send != msg_recv:
 			print('Receive error !!!')
-		time.sleep(0.0001 * count)
+		time.sleep(0.01)
+
+	client.send('exit')
+	#client.recv()
 
 
-def rep():
+def rep(count):
 	context = zmq.Context()
 	server = context.socket(zmq.REP)
 	server.bind(address)
 
-	while True:
+	while count > 0:
 		msg = server.recv()
-		server.send(msg)
+		if msg == 'exit':
+			count = count - 1
+			print('%d' % count)
+			server.send('ok')
+		else:
+			server.send(msg)
 
 
 def pub1():
@@ -94,13 +104,13 @@ def pub1():
 	publisher = context.socket(zmq.PUB)
 	publisher.bind(address)
 
-	for i in xrange(0, 10):
+	for i in xrange(0, PROCESS_COUNT * 10):
 		msg = str(datetime.now())
 		publisher.send(msg)
 		print('Send: %s' % msg)
-		time.sleep(1)
+		time.sleep(1.0 / PROCESS_COUNT)
 
-	publisher.send(msg + 'exit')
+	publisher.send(str(datetime.today().year) + ':exit')
 
 
 def sub1():
@@ -111,10 +121,11 @@ def sub1():
 	msg_filter = str(datetime.today().year)
 	subscriber.setsockopt(zmq.SUBSCRIBE, msg_filter)
 
-	msg = ''
-	while not msg.endswith('exit'):
+	while True:
 		msg = subscriber.recv()
 		print('Receive: %s' % msg)
+		if msg.endswith('exit'):
+			break
 
 
 def pub(count):
@@ -122,12 +133,12 @@ def pub(count):
 	publisher = context.socket(zmq.PUB)
 	publisher.bind(address)
 
-	for i in xrange(0, count + 10):
+	for i in xrange(0, count * 10):
 		msg = str(datetime.now())
 		publisher.send(msg)
-		time.sleep(0.1)
+		time.sleep(0.01)
 
-	publisher.send(msg + 'exit')
+	publisher.send(str(datetime.today().year) + ':exit')
 
 
 def sub(count):
@@ -138,9 +149,10 @@ def sub(count):
 	msg_filter = str(datetime.today().year)
 	subscriber.setsockopt(zmq.SUBSCRIBE, msg_filter)
 
-	msg = ''
-	while not msg.endswith('exit'):
+	while True:
 		msg = subscriber.recv()
+		if msg.endswith('exit'):
+			break
 
 
 def ventilator1():
@@ -148,13 +160,13 @@ def ventilator1():
 	sender = context.socket(zmq.PUSH)
 	sender.bind('%s://*:%d' % (transport, port))
 
-	for i in xrange(0, 30):
+	for i in xrange(0, PROCESS_COUNT * 10):
 		msg = question()
 		sender.send(msg)
 		print('Send: %s' % msg)
-		time.sleep(0.3)
+		time.sleep(1.0 / PROCESS_COUNT)
 
-	for i in xrange(0, 3):
+	for i in xrange(0, PROCESS_COUNT):
 		sender.send('exit')
 
 
@@ -166,12 +178,15 @@ def worker1():
 	sender = context.socket(zmq.PUSH)
 	sender.connect('%s://localhost:%d' % (transport, port + 1))
 
-	msg = None
-	while msg != 'exit':
+	while True:
 		msg = receiver.recv()
 		print('Receive: %s' % msg)
+		if msg == 'exit':
+			break
 		time.sleep(1)
 		sender.send('%s = %s' % (msg, answer(msg)))
+
+	sender.send('exit')
 
 
 def sink1():
@@ -179,9 +194,13 @@ def sink1():
 	receiver = context.socket(zmq.PULL)
 	receiver.bind('%s://*:%d' % (transport, port + 1))
 
-	while True:
+	count = PROCESS_COUNT
+	while count > 0:
 		msg = receiver.recv()
 		print('Receive: %s' % msg)
+		if msg == 'exit':
+			count = count - 1
+			print('%d' % count)
 
 
 def ventilator(count):
@@ -189,14 +208,14 @@ def ventilator(count):
 	sender = context.socket(zmq.PUSH)
 	sender.bind('%s://*:%d' % (transport, port))
 
-	for i in xrange(0, 30 * count):
+	for i in xrange(0, count * 10):
 		msg = os.urandom(TEST_BLOCK_SIZE)
 		sender.send(msg)
 		if len(msg) != TEST_BLOCK_SIZE:
 			print('Send error !!!')
-		time.sleep(0.01 * count)
+		time.sleep(0.01)
 
-	for i in xrange(0, 3 * count):
+	for i in xrange(0, count):
 		sender.send('exit')
 
 
@@ -208,35 +227,42 @@ def worker(count):
 	sender = context.socket(zmq.PUSH)
 	sender.connect('%s://localhost:%d' % (transport, port + 1))
 
-	msg = None
-	while msg != 'exit':
+	while True:
 		msg = receiver.recv()
+		if msg == 'exit':
+			break
 		if len(msg) != TEST_BLOCK_SIZE:
 			print('Receive error !!!')
-		time.sleep(0.03 * count)
+		time.sleep(0.01 * PROCESS_COUNT)
 		sender.send(msg)
 
+	sender.send('exit')
 
-def sink():
+
+def sink(count):
 	context = zmq.Context()
 	receiver = context.socket(zmq.PULL)
 	receiver.bind('%s://*:%d' % (transport, port + 1))
 
-	while True:
+	while count > 0:
 		msg = receiver.recv()
-		if len(msg) != TEST_BLOCK_SIZE and msg != 'exit':
+		if msg == 'exit':
+			count = count - 1
+			print('%d' % count)
+		elif len(msg) != TEST_BLOCK_SIZE:
 			print('Receive error !!!')
 
 
-def start_thread(func, count):
+def start_thread(func, thread_count):
 	import threading
 
+	count = thread_count * PROCESS_COUNT
 	threads = []
-	for t in xrange(0, count):
+	for t in xrange(0, thread_count):
 		print('thread: %d' % t)
 		thread = threading.Thread(target=func, args=(count,))
-		thread.start()
 		threads.append(thread)
+		thread.start()
 		time.sleep(0.1)
 
 	for thread in threads:
@@ -258,10 +284,8 @@ def main():
 		if threads > 1:
 			if mode == 'req' or mode == 'sub' or mode == 'worker':
 				start_thread(func, threads)
-			elif mode == 'pub' or mode == 'ventilator':
-				func(threads)
 			else:
-				func()
+				func(threads * PROCESS_COUNT)
 		else:
 			func()
 
