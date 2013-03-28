@@ -3,5 +3,14 @@
 
 import os
 
-env = Environment(CCFLAGS='/EHsc')
+env = Environment()
+env.Append(CCFLAGS='/EHsc')
+
+try:
+	from local_settings import *
+	env.Append(CPPPATH=include_path)
+	env.Append(LIBPATH=library_path)
+except ImportError:
+	pass
+
 env.Program('node.cpp')
