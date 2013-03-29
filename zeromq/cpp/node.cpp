@@ -11,6 +11,8 @@
 
 #include <boost/algorithm/string.hpp>
 
+#include <format.h>
+
 using namespace std;
 using namespace boost::algorithm;
 
@@ -37,18 +39,20 @@ string Question()
 	double x = genDouble(g_randomEngine);
 	double y = genDouble(g_randomEngine);
 
+	// C++ 11 写法如下：
+	//const static vector<string> ops = { "+", "-", "*", "/" };
+	// VC2012 暂时不支持上面的写法，所以只能用下面的写法：
 	const static string rawData[] = { "+", "-", "*", "/" };
 	const static vector<string> ops(rawData, rawData + countof(rawData));
 	uniform_int<int> genInt(0, 3);
 	string op = ops[genInt(g_randomEngine)];
 
-	if (op == "/" && y == 0)	// ???
+	if (op == "/" && (-0.01 < y && y < 0.01))
 	{
 		y = 100;
 	}
 
-	//return '%.2f %s %.2f' % (x, op, y)
-	return "";
+	return format("%.2f %s %.2f") % x % op % y;
 }
 
 string Answer()

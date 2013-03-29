@@ -1,0 +1,11 @@
+#! /usr/bin/env python
+# -*- coding: utf-8 -*-
+
+include_path = [
+	r'E:\Library\Import\Include',
+	r'E:\Library\Import\boost',
+]
+
+library_path = [
+	r'E:\Library\Import\boost\stage\lib',
+]
