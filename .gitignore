@@ -167,4 +167,6 @@ pip-log.txt
 ## Sample
 #############
 
+.*
 local_settings.py
+node.exe
