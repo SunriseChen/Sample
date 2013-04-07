@@ -10,10 +10,12 @@
 #include <vector>
 
 #include <boost/algorithm/string.hpp>
+#include <boost/python.hpp>
 
-#include <format.h>
+#include <Boost/Import/format.h>
 
 using namespace std;
+using namespace boost;
 using namespace boost::algorithm;
 
 //transport = 'tcp';
@@ -52,11 +54,12 @@ string Question()
 		y = 100;
 	}
 
-	return format("%.2f %s %.2f") % x % op % y;
+	return (format("%.2f %s %.2f") % x % op % y).str();
 }
 
 string Answer()
 {
+	PyRun_SimpleString("str(eval(''))");
 	return "";
 }
 
@@ -131,7 +134,7 @@ void Sink(int count)
 }
 
 typedef void FuncType(int);
-typedef function<FuncType> Func;
+typedef std::function<FuncType> Func;
 
 Func GetFunc(const string &funcName)
 {
@@ -167,16 +170,16 @@ void StartThread(Func &func, int threadCount)
 {
 	const int count = threadCount * PROCESS_COUNT;
 
-	vector<shared_ptr<thread>> threads;
+	vector<std::shared_ptr<thread>> threads;
 	for (int i = 0; i < threadCount; ++i)
 	{
 		cout << "thread: " << i << endl;
-		shared_ptr<thread> t(new thread(func, count));
+		std::shared_ptr<thread> t(new thread(func, count));
 		threads.push_back(t);
 		this_thread::sleep_for(chrono::milliseconds(100));
 	}
 
-	for each (auto t in threads)
+	for (auto &t : threads)
 	{
 		if (t)
 		{
@@ -204,6 +207,8 @@ int main(int argc, char *argv[])
 			return 1;
 		}
 
+		Py_Initialize();
+
 		if (threads > 1)
 		{
 			if (mode == "req" || mode == "sub" || mode == "worker")
@@ -219,6 +224,8 @@ int main(int argc, char *argv[])
 		{
 			func(1);
 		}
+
+		Py_Finalize();
 	}
 
 	return 0;
