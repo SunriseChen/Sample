@@ -170,3 +170,5 @@ pip-log.txt
 .*
 local_settings.py
 node.exe
+node.exp
+node.lib
