@@ -2,10 +2,12 @@
 # -*- coding: utf-8 -*-
 
 include_path = [
-	r'E:\Library\Import\Include',
 	r'E:\Library\Import\boost',
+	r'E:\Library\build_lib\lib_info',
+	r'D:\Python27\include',
 ]
 
 library_path = [
-	r'E:\Library\Import\boost\stage\lib',
+	#r'E:\Library\Import\boost\stage\lib',
+	r'D:\Python27\libs',
 ]

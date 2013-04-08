@@ -10,13 +10,18 @@
 #include <vector>
 
 #include <boost/algorithm/string.hpp>
+
+#pragma comment(lib, "python27.lib")
+#define BOOST_PYTHON_SOURCE
 #include <boost/python.hpp>
+#include <Boost/Import/python.cpp>
 
 #include <Boost/Import/format.h>
 
 using namespace std;
 using namespace boost;
 using namespace boost::algorithm;
+using namespace boost::python;
 
 //transport = 'tcp';
 //host = '127.0.0.1';
@@ -57,10 +62,9 @@ string Question()
 	return (format("%.2f %s %.2f") % x % op % y).str();
 }
 
-string Answer()
+string Answer(const string &question)
 {
-	PyRun_SimpleString("str(eval(''))");
-	return "";
+	return (format("%f") % extract<double>(eval(question.c_str()))).str();
 }
 
 void Request1(int count)
