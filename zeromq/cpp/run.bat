@@ -1,6 +1,8 @@
 @echo off
 
+if '%virtual_env%' == '' call D:\lib\build_lib\pyenv\Scripts\activate.bat
 call scons -Q
+if %scons_errorlevel% GTR '0' goto End
 if '%1'=='rr' goto RequestReply
 if '%1'=='ps' goto PublishSubscribe
 if '%1'=='pp' goto ParallelPipeline
