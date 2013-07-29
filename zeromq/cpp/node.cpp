@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <chrono>
 #include <functional>
 #include <iostream>
@@ -18,16 +19,19 @@
 
 #include <Boost/Import/format.h>
 
+#define ZMQ_HAS_RVALUE_REFS
+#include <zmq.hpp>
+
 using namespace std;
 using namespace boost;
 using namespace boost::algorithm;
 using namespace boost::python;
 
-//transport = 'tcp';
-//host = '127.0.0.1';
-//port = 1234;
-//endpoint = '%s:%d' % (host, port);
-//address = '%s://%s' % (transport, endpoint);
+const string transport = 'tcp';
+//const string host = '127.0.0.1';
+const int port = 1234;
+const string endpoint = "127.0.0.1:1234";
+const string address = "tcp://127.0.0.1:1234";
 
 const int PROCESS_COUNT = 3;
 const int TEST_BLOCK_SIZE = 1024;
@@ -79,12 +83,53 @@ void Reply1(int count)
 
 void Request(int count)
 {
+	zmq::context_t context(1);
+	zmq::socket_t client(context, ZMQ_REQ);
+	client.connect(address);
 
+	uniform_int<unsigned char> genByte(0, 255);
+	zmq::message_t msgSend(TEST_BLOCK_SIZE), msgReceive;
+	for (int i = 0; i < 10; ++i)
+	{
+		generate_n(msgSend.data(), msgSend.size(), [&]() { return genByte(g_randomEngine); });
+		client.send(msgSend);
+		if (msgSend.size() != TEST_BLOCK_SIZE)
+		{
+			cout << "Send error !!!" << endl;
+		}
+		client.recv(&msgReceive);
+		if (msgSend != msgReceive)
+		{
+			cout << "Receive error !!!" << endl;
+		}
+		this_thread::sleep_for(chrono::milliseconds(10));
+	}
+
+	client.send('exit')
+	//client.recv()
 }
 
 void Reply(int count)
 {
+	zmq::context_t context(1);
+	zmq::socket_t server(context, ZMQ_REP);
+	server.bind(address);
 
+	zmq::message_t msg;
+	while (count > 0)
+	{
+		server.recv(&msg);
+		if (msg == "exit")
+		{
+			--count;
+			cout << count << endl;
+			server.send("ok");
+		}
+		else
+		{
+			server.send(msg);
+		}
+	}
 }
 
 void Publish1(int count)
@@ -175,11 +220,13 @@ void StartThread(Func &func, int threadCount)
 	const int count = threadCount * PROCESS_COUNT;
 
 	vector<std::shared_ptr<thread>> threads;
+	//vector<thread> threads;
 	for (int i = 0; i < threadCount; ++i)
 	{
 		cout << "thread: " << i << endl;
 		std::shared_ptr<thread> t(new thread(func, count));
 		threads.push_back(t);
+		//threads.push_back(thread(func, count));
 		this_thread::sleep_for(chrono::milliseconds(100));
 	}
 
@@ -189,6 +236,7 @@ void StartThread(Func &func, int threadCount)
 		{
 			t->join();
 		}
+		//t.join();
 	}
 }
 
