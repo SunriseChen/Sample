@@ -12,7 +12,6 @@
 
 #include <boost/algorithm/string.hpp>
 
-#pragma comment(lib, "python27.lib")
 #define BOOST_PYTHON_SOURCE
 #include <boost/python.hpp>
 #include <Boost/Import/python.cpp>
@@ -22,13 +21,16 @@
 #define ZMQ_HAS_RVALUE_REFS
 #include <zmq.hpp>
 
+#pragma comment(lib, "python27.lib")
+#pragma comment(lib, "libzmq.lib")
+
 using namespace std;
 using namespace boost;
 using namespace boost::algorithm;
 using namespace boost::python;
 
-const string transport = 'tcp';
-//const string host = '127.0.0.1';
+const string transport = "tcp";
+//const string host = "127.0.0.1";
 const int port = 1234;
 const string endpoint = "127.0.0.1:1234";
 const string address = "tcp://127.0.0.1:1234";
@@ -85,27 +87,32 @@ void Request(int count)
 {
 	zmq::context_t context(1);
 	zmq::socket_t client(context, ZMQ_REQ);
-	client.connect(address);
+	client.connect(address.c_str());
 
 	uniform_int<unsigned char> genByte(0, 255);
 	zmq::message_t msgSend(TEST_BLOCK_SIZE), msgReceive;
 	for (int i = 0; i < 10; ++i)
 	{
-		generate_n(msgSend.data(), msgSend.size(), [&]() { return genByte(g_randomEngine); });
+		generate_n(static_cast<unsigned char *>(msgSend.data()), msgSend.size(), [&]()
+		{
+			return genByte(g_randomEngine);
+		});
 		client.send(msgSend);
 		if (msgSend.size() != TEST_BLOCK_SIZE)
 		{
 			cout << "Send error !!!" << endl;
 		}
 		client.recv(&msgReceive);
-		if (msgSend != msgReceive)
+		if (memcmp(msgSend.data(), msgReceive.data(), msgSend.size()) != 0)
 		{
 			cout << "Receive error !!!" << endl;
 		}
 		this_thread::sleep_for(chrono::milliseconds(10));
 	}
 
-	client.send('exit')
+	zmq::message_t reply(4);
+	memcpy(reply.data(), "exit", reply.size());
+	client.send(reply);
 	//client.recv()
 }
 
@@ -113,17 +120,20 @@ void Reply(int count)
 {
 	zmq::context_t context(1);
 	zmq::socket_t server(context, ZMQ_REP);
-	server.bind(address);
+	server.bind(address.c_str());
 
 	zmq::message_t msg;
 	while (count > 0)
 	{
 		server.recv(&msg);
-		if (msg == "exit")
+		string str(static_cast<char *>(msg.data()));
+		if (str == "exit")
 		{
 			--count;
 			cout << count << endl;
-			server.send("ok");
+			zmq::message_t reply(2);
+			memcpy(reply.data(), "ok", reply.size());
+			server.send(reply);
 		}
 		else
 		{
@@ -219,24 +229,17 @@ void StartThread(Func &func, int threadCount)
 {
 	const int count = threadCount * PROCESS_COUNT;
 
-	vector<std::shared_ptr<thread>> threads;
-	//vector<thread> threads;
+	vector<thread> threads;
 	for (int i = 0; i < threadCount; ++i)
 	{
 		cout << "thread: " << i << endl;
-		std::shared_ptr<thread> t(new thread(func, count));
-		threads.push_back(t);
-		//threads.push_back(thread(func, count));
+		threads.push_back(thread(func, count));
 		this_thread::sleep_for(chrono::milliseconds(100));
 	}
 
 	for (auto &t : threads)
 	{
-		if (t)
-		{
-			t->join();
-		}
-		//t.join();
+		t.join();
 	}
 }
 
