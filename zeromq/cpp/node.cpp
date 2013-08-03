@@ -1,6 +1,5 @@
 #include <algorithm>
 #include <chrono>
-#include <functional>
 #include <iostream>
 #include <map>
 #include <random>
@@ -21,7 +20,7 @@
 #define ZMQ_HAS_RVALUE_REFS
 #include <zmq.hpp>
 
-#pragma comment(lib, "python27.lib")
+#pragma comment(lib, "python33.lib")
 #pragma comment(lib, "libzmq.lib")
 
 using namespace std;
@@ -90,27 +89,30 @@ void Request(int count)
 	client.connect(address.c_str());
 
 	uniform_int<unsigned char> genByte(0, 255);
-	zmq::message_t msgSend(TEST_BLOCK_SIZE), msgReceive;
 	for (int i = 0; i < 10; ++i)
 	{
+		zmq::message_t msgSend(TEST_BLOCK_SIZE);
 		generate_n(static_cast<unsigned char *>(msgSend.data()), msgSend.size(), [&]()
 		{
 			return genByte(g_randomEngine);
 		});
-		client.send(msgSend);
-		if (msgSend.size() != TEST_BLOCK_SIZE)
+		if (!client.send(msgSend))
 		{
 			cout << "Send error !!!" << endl;
 		}
-		client.recv(&msgReceive);
-		if (memcmp(msgSend.data(), msgReceive.data(), msgSend.size()) != 0)
+		zmq::message_t msgReceive;
+		if (!client.recv(&msgReceive))
 		{
 			cout << "Receive error !!!" << endl;
+		}
+		else if (memcmp(msgSend.data(), msgReceive.data(), msgSend.size()) != 0)
+		{
+			cout << "Receive Data error !!!" << endl;
 		}
 		this_thread::sleep_for(chrono::milliseconds(10));
 	}
 
-	zmq::message_t reply(4);
+	zmq::message_t reply(5);
 	memcpy(reply.data(), "exit", reply.size());
 	client.send(reply);
 	//client.recv()
@@ -131,7 +133,7 @@ void Reply(int count)
 		{
 			--count;
 			cout << count << endl;
-			zmq::message_t reply(2);
+			zmq::message_t reply(3);
 			memcpy(reply.data(), "ok", reply.size());
 			server.send(reply);
 		}
@@ -192,12 +194,11 @@ void Sink(int count)
 
 }
 
-typedef void FuncType(int);
-typedef std::function<FuncType> Func;
+typedef void (*Func)(int);
 
 Func GetFunc(const string &funcName)
 {
-	typedef map<string, FuncType*> FuncMap;
+	typedef map<string, Func> FuncMap;
 	const static FuncMap::value_type rawData[] = {
 		FuncMap::value_type("req1", Request1),
 		FuncMap::value_type("rep1", Reply1),
@@ -219,13 +220,13 @@ Func GetFunc(const string &funcName)
 	auto found = funcMap.find(funcName);
 	if (found != funcMap.end())
 	{
-		return Func(found->second);
+		return found->second;
 	}
 
 	return nullptr;
 }
 
-void StartThread(Func &func, int threadCount)
+void StartThread(Func func, int threadCount)
 {
 	const int count = threadCount * PROCESS_COUNT;
 
@@ -281,6 +282,8 @@ int main(int argc, char *argv[])
 		}
 
 		Py_Finalize();
+
+		system("pause");
 	}
 
 	return 0;
