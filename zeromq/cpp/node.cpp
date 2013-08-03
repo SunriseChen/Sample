@@ -74,12 +74,62 @@ string Answer(const string &question)
 
 void Request1(int count)
 {
+	zmq::context_t context(1);
+	zmq::socket_t client(context, ZMQ_REQ);
+	client.connect(address.c_str());
 
+	uniform_int<unsigned char> genByte(0, 255);
+	for (int i = 0; i < 10; ++i)
+	{
+		string msgSend = Question();
+		zmq::message_t msg(msgSend.size() + 1);
+		memcpy(msg.data(), msgSend.c_str(), msg.size());
+		client.send(msg);
+		cout << "Send: " << msgSend << endl;
+		if (!client.recv(&msg))
+		{
+			cout << "Receive error !!!" << endl;
+		}
+		string msgReceive(static_cast<char *>(msg.data()));
+		cout << "Receive: " << msgReceive << endl;
+		this_thread::sleep_for(chrono::seconds(1));
+	}
+
+	zmq::message_t reply(5);
+	memcpy(reply.data(), "exit", reply.size());
+	client.send(reply);
+	//client.recv();
 }
 
 void Reply1(int count)
 {
+	zmq::context_t context(1);
+	zmq::socket_t server(context, ZMQ_REP);
+	server.bind(address.c_str());
 
+	zmq::message_t msgReceive;
+	count = PROCESS_COUNT;
+	while (count > 0)
+	{
+		server.recv(&msgReceive);
+		string str(static_cast<char *>(msgReceive.data()));
+		cout << "Receive: " << str << endl;
+		if (str == "exit")
+		{
+			--count;
+			cout << count << endl;
+			zmq::message_t reply(3);
+			memcpy(reply.data(), "ok", reply.size());
+			server.send(reply);
+		}
+		else
+		{
+			str = Answer(str);
+			zmq::message_t msgSend(str.size() + 1);
+			memcpy(msgSend.data(), str.c_str(), msgSend.size());
+			server.send(msgSend);
+		}
+	}
 }
 
 void Request(int count)
@@ -115,7 +165,7 @@ void Request(int count)
 	zmq::message_t reply(5);
 	memcpy(reply.data(), "exit", reply.size());
 	client.send(reply);
-	//client.recv()
+	//client.recv();
 }
 
 void Reply(int count)
